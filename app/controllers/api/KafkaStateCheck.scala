@@ -64,23 +64,13 @@ class KafkaStateCheck (val messagesApi: MessagesApi, val kafkaManagerContext: Ka
       } yield tiOpt.map(VerboseTopicIdentity(_))))
   }
 
-  def clusters(status: Option[String]) = Action.async { implicit request =>
+  def clusters = Action.async { implicit request =>
+    implicit val formats = org.json4s.DefaultFormats
     kafkaManager.getClusterList.map { errorOrClusterList =>
       errorOrClusterList.fold(
         error => BadRequest(Json.obj("msg" -> error.msg)),
-        clusterList => Ok(getClusterListJson(clusterList, status))
+        clusterList => Ok(Serialization.writePretty("clusters" -> errorOrClusterList.getOrElse(None)))
       )
-    }
-  }
-
-  def getClusterListJson(clusterList: KMClusterList, status: Option[String]) = {
-    val active = clusterList.active.map(cc => Map("name" -> cc.name, "status" -> "active"))
-    val pending = clusterList.pending.map(cc => Map("name" -> cc.name, "status" -> "pending"))
-
-    status match {
-      case Some("active") => Json.obj("clusters" -> active.sortBy(_("name")))
-      case Some("pending") => Json.obj("clusters" -> pending.sortBy(_("name")))
-      case _ => Json.obj("clusters" -> (active ++ pending).sortBy(_("name")))
     }
   }
 
