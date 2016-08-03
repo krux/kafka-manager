@@ -61,8 +61,7 @@ class KafkaStateCheck (val messagesApi: MessagesApi, val kafkaManagerContext: Ka
     Serialization.writePretty("topicIdentities" -> (for {
       (tn, tiOpt) <- topicIdentities
       ti <- tiOpt
-      } yield tiOpt))
-//  } yield tiOpt.map(VerboseTopicIdentity(_))))
+      } yield tiOpt.map(VerboseTopicIdentity(_))))
   }
 
   def clusters(status: Option[String]) = Action.async { implicit request =>
