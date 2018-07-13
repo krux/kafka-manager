@@ -256,7 +256,7 @@ class BrokerViewCacheActor(config: BrokerViewCacheActorConfig) extends LongRunni
       }
       topicIdentities = topicIdentity.map(ti => (ti.topic, ti)).toMap
       val topicPartitionByBroker = topicIdentity.flatMap(
-        ti => ti.partitionsByBroker.map(btp => (ti,btp.id,btp.partitions))).groupBy(_._2)
+        ti => ti.partitionsByBroker.map(btp => (ti,btp.id,btp.partitions,btp.leaders))).groupBy(_._2)
 
       featureGate(KMJMXMetricsFeature) {
         implicit val ec = longRunningExecutionContext
@@ -286,9 +286,9 @@ class BrokerViewCacheActor(config: BrokerViewCacheActorConfig) extends LongRunni
 
       topicPartitionByBroker.foreach {
         case (brokerId, topicPartitions) =>
-          val topicPartitionsMap: Map[TopicIdentity, IndexedSeq[Int]] = topicPartitions.map {
-            case (topic, id, partitions) =>
-              (topic, partitions)
+          val topicPartitionsMap: Map[TopicIdentity, BrokerTopicInfo] = topicPartitions.map {
+            case (topic, id, partitions, leaders) =>
+              (topic, BrokerTopicInfo(partitions, leaders))
           }.toMap
           brokerTopicPartitions.put(
             brokerId, BVView(topicPartitionsMap, config.clusterContext, brokerMetrics.get(brokerId)))
@@ -311,7 +311,7 @@ class BrokerViewCacheActor(config: BrokerViewCacheActorConfig) extends LongRunni
   }
 
   private def updateTopicMetrics(brokerList: BrokerList,
-    topicPartitionByBroker: Map[Int, IndexedSeq[(TopicIdentity, Int, IndexedSeq[Int])]]
+    topicPartitionByBroker: Map[Int, IndexedSeq[(TopicIdentity, Int, IndexedSeq[Int], IndexedSeq[Int])]]
     )(implicit ec: ExecutionContext): Unit = {
     val brokerLookup = brokerList.list.map(bi => bi.id -> bi).toMap
     topicPartitionByBroker.foreach {
@@ -322,11 +322,11 @@ class BrokerViewCacheActor(config: BrokerViewCacheActorConfig) extends LongRunni
             longRunning {
               Future {
                 val tryResult = KafkaJMX.doWithConnection(broker.host, broker.jmxPort,
-                  config.clusterContext.config.jmxUser, config.clusterContext.config.jmxPass
+                  config.clusterContext.config.jmxUser, config.clusterContext.config.jmxPass, config.clusterContext.config.jmxSsl
                 ) {
                   mbsc =>
                     topicPartitions.map {
-                      case (topic, id, partitions) =>
+                      case (topic, id, partitions, leaders) =>
                         (topic.topic,
                           KafkaMetrics.getBrokerMetrics(config.clusterContext.config.version, mbsc, None, Option(topic.topic)))
                     }
@@ -335,7 +335,7 @@ class BrokerViewCacheActor(config: BrokerViewCacheActorConfig) extends LongRunni
                   case scala.util.Failure(t) =>
                     log.error(t, s"Failed to get topic metrics for broker $broker")
                     topicPartitions.map {
-                      case (topic, id, partitions) =>
+                      case (topic, id, partitions, leaders) =>
                         (topic.topic, BrokerMetrics.DEFAULT)
                     }
                   case scala.util.Success(bm) => bm
@@ -354,7 +354,7 @@ class BrokerViewCacheActor(config: BrokerViewCacheActorConfig) extends LongRunni
         longRunning {
           Future {
             val tryResult = KafkaJMX.doWithConnection(broker.host, broker.jmxPort,
-              config.clusterContext.config.jmxUser, config.clusterContext.config.jmxPass
+              config.clusterContext.config.jmxUser, config.clusterContext.config.jmxPass, config.clusterContext.config.jmxSsl
             ) {
               mbsc =>
                 KafkaMetrics.getBrokerMetrics(config.clusterContext.config.version, mbsc, brokerMetrics.get(broker.id).map(_.size))
@@ -378,7 +378,7 @@ class BrokerViewCacheActor(config: BrokerViewCacheActorConfig) extends LongRunni
         longRunning {
           Future {
             val tryResult = KafkaJMX.doWithConnection(broker.host, broker.jmxPort,
-              config.clusterContext.config.jmxUser, config.clusterContext.config.jmxPass
+              config.clusterContext.config.jmxUser, config.clusterContext.config.jmxPass, config.clusterContext.config.jmxSsl
             ) {
               mbsc =>
                 KafkaMetrics.getLogSegmentsInfo(mbsc)
