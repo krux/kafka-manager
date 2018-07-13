@@ -65,7 +65,7 @@ Broker View
 Requirements
 ------------
 
-1. [Kafka 0.8.1.1 or 0.8.2.* or 0.9.0.*](http://kafka.apache.org/downloads.html)
+1. [Kafka 0.8.*.* or 0.9.*.* or 0.10.*.* or 0.11.*.*](http://kafka.apache.org/downloads.html)
 2. Java 8+
 
 Configuration
@@ -155,6 +155,16 @@ Again, if java is not in your path, or you need to run against a different versi
 add the -java-home option as follows:
 
     $ bin/kafka-manager -java-home /usr/local/oracle-java-8
+
+Starting the service with Security
+----------------------------------
+
+To add JAAS configuration for SASL, add the config file location at start:
+
+    $ bin/kafka-manager -Djava.security.auth.login.config=/path/to/my-jaas.conf
+
+NOTE: Make sure the user running kafka manager has read permissions on the jaas config file
+
 
 Packaging
 ---------

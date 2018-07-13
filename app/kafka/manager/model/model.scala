@@ -37,6 +37,48 @@ case object Kafka_0_9_0_0 extends KafkaVersion {
 case object Kafka_0_9_0_1 extends KafkaVersion {
   override def toString = "0.9.0.1"
 }
+case object Kafka_0_10_0_0 extends KafkaVersion {
+  override def toString = "0.10.0.0"
+}
+case object Kafka_0_10_0_1 extends KafkaVersion {
+  override def toString = "0.10.0.1"
+}
+
+case object Kafka_0_10_1_0 extends KafkaVersion {
+  override def toString = "0.10.1.0"
+}
+
+case object Kafka_0_10_1_1 extends KafkaVersion {
+  override def toString = "0.10.1.1"
+}
+
+case object Kafka_0_10_2_0 extends KafkaVersion {
+  override def toString = "0.10.2.0"
+}
+
+case object Kafka_0_10_2_1 extends KafkaVersion {
+  override def toString = "0.10.2.1"
+}
+
+case object Kafka_0_11_0_0 extends KafkaVersion {
+  override def toString = "0.11.0.0"
+}
+
+case object Kafka_0_11_0_2 extends KafkaVersion {
+  override def toString = "0.11.0.2"
+}
+
+case object Kafka_1_0_0 extends KafkaVersion {
+  override def toString = "1.0.0"
+}
+
+case object Kafka_1_0_1 extends KafkaVersion {
+  override def toString = "1.0.1"
+}
+
+case object Kafka_1_1_0 extends KafkaVersion {
+  override def toString = "1.1.0"
+}
 
 object KafkaVersion {
   val supportedVersions: Map[String,KafkaVersion] = Map(
@@ -46,10 +88,21 @@ object KafkaVersion {
     "0.8.2.1" -> Kafka_0_8_2_1,
     "0.8.2.2" -> Kafka_0_8_2_2,
     "0.9.0.0" -> Kafka_0_9_0_0,
-    "0.9.0.1" -> Kafka_0_9_0_1
+    "0.9.0.1" -> Kafka_0_9_0_1,
+    "0.10.0.0" -> Kafka_0_10_0_0,
+    "0.10.0.1" -> Kafka_0_10_0_1,
+    "0.10.1.0" -> Kafka_0_10_1_0,
+    "0.10.1.1" -> Kafka_0_10_1_1,
+    "0.10.2.0" -> Kafka_0_10_2_0,
+    "0.10.2.1" -> Kafka_0_10_2_1,
+    "0.11.0.0" -> Kafka_0_11_0_0,
+    "0.11.0.2" -> Kafka_0_11_0_2,
+    "1.0.0" -> Kafka_1_0_0,
+    "1.0.1" -> Kafka_1_0_1,
+    "1.1.0" -> Kafka_1_1_0
   )
 
-  val formSelectList : IndexedSeq[(String,String)] = supportedVersions.toIndexedSeq.filterNot(_._1.contains("beta")).map(t => (t._1,t._2.toString))
+  val formSelectList : IndexedSeq[(String,String)] = supportedVersions.toIndexedSeq.filterNot(_._1.contains("beta")).map(t => (t._1,t._2.toString)).sortWith((a, b) => sortVersion(a._1, b._1))
 
   def apply(s: String) : KafkaVersion = {
     supportedVersions.get(s) match {
@@ -60,6 +113,20 @@ object KafkaVersion {
 
   def unapply(v: KafkaVersion) : Option[String] = {
     Some(v.toString)
+  }
+
+  private def sortVersion(versionNum: String, kafkaVersion: String): Boolean = {
+    val separator = "\\."
+    val versionNumList = versionNum.split(separator, -1).toList
+    val kafkaVersionList = kafkaVersion.split(separator, -1).toList
+    def compare(a: List[String], b: List[String]): Boolean = a.nonEmpty match {
+      case true if b.nonEmpty =>
+        if (a.head == b.head) compare(a.tail, b.tail) else a.head.toInt < b.head.toInt
+      case true if b.isEmpty => false
+      case false if b.nonEmpty => true
+      case _ => true
+    }
+    compare(versionNumList, kafkaVersionList)
   }
 }
 
@@ -92,12 +159,14 @@ object ClusterConfig {
             , jmxEnabled: Boolean
             , jmxUser: Option[String]
             , jmxPass: Option[String]
+            , jmxSsl: Boolean
             , pollConsumers: Boolean
             , filterConsumers: Boolean
             , logkafkaEnabled: Boolean = false
             , activeOffsetCacheEnabled: Boolean = false
             , displaySizeEnabled: Boolean = false
             , tuning: Option[ClusterTuning]
+            , securityProtocol: String
            ) : ClusterConfig = {
     val kafkaVersion = KafkaVersion(version)
     //validate cluster name
@@ -113,31 +182,34 @@ object ClusterConfig {
       , jmxEnabled
       , jmxUser
       , jmxPass
+      , jmxSsl
       , pollConsumers
       , filterConsumers
       , logkafkaEnabled
       , activeOffsetCacheEnabled
       , displaySizeEnabled
       , tuning
+      , SecurityProtocol(securityProtocol)
     )
   }
 
   def customUnapply(cc: ClusterConfig) : Option[(
-    String, String, String, Int, Boolean, Option[String], Option[String], Boolean, Boolean, Boolean, Boolean, Boolean, Option[ClusterTuning])] = {
+    String, String, String, Int, Boolean, Option[String], Option[String], Boolean, Boolean, Boolean, Boolean, Boolean, Boolean, Option[ClusterTuning], String)] = {
     Some((
       cc.name, cc.version.toString, cc.curatorConfig.zkConnect, cc.curatorConfig.zkMaxRetry,
-      cc.jmxEnabled, cc.jmxUser, cc.jmxPass, cc.pollConsumers, cc.filterConsumers,
-      cc.logkafkaEnabled, cc.activeOffsetCacheEnabled, cc.displaySizeEnabled, cc.tuning
+      cc.jmxEnabled, cc.jmxUser, cc.jmxPass, cc.jmxSsl, cc.pollConsumers, cc.filterConsumers,
+      cc.logkafkaEnabled, cc.activeOffsetCacheEnabled, cc.displaySizeEnabled, cc.tuning, cc.securityProtocol.stringId
       )
     )
   }
 
-  import scalaz.{Failure,Success}
   import scalaz.syntax.applicative._
+  import scalaz.{Failure, Success}
   import org.json4s._
   import org.json4s.jackson.JsonMethods._
   import org.json4s.jackson.Serialization
   import org.json4s.scalaz.JsonScalaz._
+
   import scala.language.reflectiveCalls
 
   implicit val formats = Serialization.formats(FullTypeHints(List(classOf[ClusterConfig])))
@@ -162,12 +234,14 @@ object ClusterConfig {
       :: ("jmxEnabled" -> toJSON(config.jmxEnabled))
       :: ("jmxUser" -> toJSON(config.jmxUser))
       :: ("jmxPass" -> toJSON(config.jmxPass))
+      :: ("jmxSsl" -> toJSON(config.jmxSsl))
       :: ("pollConsumers" -> toJSON(config.pollConsumers))
       :: ("filterConsumers" -> toJSON(config.filterConsumers))
       :: ("logkafkaEnabled" -> toJSON(config.logkafkaEnabled))
       :: ("activeOffsetCacheEnabled" -> toJSON(config.activeOffsetCacheEnabled))
       :: ("displaySizeEnabled" -> toJSON(config.displaySizeEnabled))
       :: ("tuning" -> toJSON(config.tuning))
+      :: ("securityProtocol" -> toJSON(config.securityProtocol.stringId))
       :: Nil)
     compact(render(json)).getBytes(StandardCharsets.UTF_8)
   }
@@ -184,12 +258,15 @@ object ClusterConfig {
           val jmxEnabled = fieldExtended[Boolean]("jmxEnabled")(json)
           val jmxUser = fieldExtended[Option[String]]("jmxUser")(json)
           val jmxPass = fieldExtended[Option[String]]("jmxPass")(json)
+          val jmxSsl = fieldExtended[Boolean]("jmxSsl")(json)
           val pollConsumers = fieldExtended[Boolean]("pollConsumers")(json)
           val filterConsumers = fieldExtended[Boolean]("filterConsumers")(json)
           val logkafkaEnabled = fieldExtended[Boolean]("logkafkaEnabled")(json)
           val activeOffsetCacheEnabled = fieldExtended[Boolean]("activeOffsetCacheEnabled")(json)
           val displaySizeEnabled = fieldExtended[Boolean]("displaySizeEnabled")(json)
           val clusterTuning = fieldExtended[Option[ClusterTuning]]("tuning")(json)
+          val securityProtocolString = fieldExtended[String]("securityProtocol")(json)
+          val securityProtocol = securityProtocolString.map(SecurityProtocol.apply).getOrElse(PLAINTEXT)
 
           ClusterConfig.apply(
             name,
@@ -198,12 +275,14 @@ object ClusterConfig {
             jmxEnabled.getOrElse(false),
             jmxUser.getOrElse(None),
             jmxPass.getOrElse(None),
+            jmxSsl.getOrElse(false),
             pollConsumers.getOrElse(false),
             filterConsumers.getOrElse(true),
             logkafkaEnabled.getOrElse(false),
             activeOffsetCacheEnabled.getOrElse(false),
             displaySizeEnabled.getOrElse(false),
-            clusterTuning.getOrElse(None)
+            clusterTuning.getOrElse(None),
+            securityProtocol
           )
       }
 
@@ -234,14 +313,15 @@ case class ClusterTuning(brokerViewUpdatePeriodSeconds: Option[Int]
                          , offsetCacheThreadPoolQueueSize: Option[Int]
                          , kafkaAdminClientThreadPoolSize: Option[Int]
                          , kafkaAdminClientThreadPoolQueueSize: Option[Int]
+                         , kafkaManagedOffsetMetadataCheckMillis: Option[Int]
+                         , kafkaManagedOffsetGroupCacheSize: Option[Int]
+                         , kafkaManagedOffsetGroupExpireDays: Option[Int]
                         )
 object ClusterTuning {
-  import scalaz.{Failure,Success}
-  import scalaz.syntax.applicative._
   import org.json4s._
-  import org.json4s.jackson.JsonMethods._
   import org.json4s.jackson.Serialization
   import org.json4s.scalaz.JsonScalaz._
+
   import scala.language.reflectiveCalls
 
   implicit val formats = Serialization.formats(FullTypeHints(List(classOf[ClusterTuning])))
@@ -263,6 +343,9 @@ object ClusterTuning {
         :: ("offsetCacheThreadPoolQueueSize" -> toJSON(tuning.offsetCacheThreadPoolQueueSize))
         :: ("kafkaAdminClientThreadPoolSize" -> toJSON(tuning.kafkaAdminClientThreadPoolSize))
         :: ("kafkaAdminClientThreadPoolQueueSize" -> toJSON(tuning.kafkaAdminClientThreadPoolQueueSize))
+        :: ("kafkaManagedOffsetMetadataCheckMillis" -> toJSON(tuning.kafkaManagedOffsetMetadataCheckMillis))
+        :: ("kafkaManagedOffsetGroupCacheSize" -> toJSON(tuning.kafkaManagedOffsetGroupCacheSize))
+        :: ("kafkaManagedOffsetGroupExpireDays" -> toJSON(tuning.kafkaManagedOffsetGroupExpireDays))
         :: Nil)
   }
 
@@ -284,6 +367,9 @@ object ClusterTuning {
         offsetCacheThreadPoolQueueSize <- fieldExtended[Option[Int]]("offsetCacheThreadPoolQueueSize")(json)
         kafkaAdminClientThreadPoolSize <- fieldExtended[Option[Int]]("kafkaAdminClientThreadPoolSize")(json)
         kafkaAdminClientThreadPoolQueueSize <- fieldExtended[Option[Int]]("kafkaAdminClientThreadPoolQueueSize")(json)
+        kafkaManagedOffsetMetadataCheckMillis <- fieldExtended[Option[Int]]("kafkaManagedOffsetMetadataCheckMillis")(json)
+        kafkaManagedOffsetGroupCacheSize <- fieldExtended[Option[Int]]("kafkaManagedOffsetGroupCacheSize")(json)
+        kafkaManagedOffsetGroupExpireDays <- fieldExtended[Option[Int]]("kafkaManagedOffsetGroupExpireDays")(json)
       } yield {
         ClusterTuning(
           brokerViewUpdatePeriodSeconds = brokerViewUpdatePeriodSeconds
@@ -301,6 +387,9 @@ object ClusterTuning {
           , offsetCacheThreadPoolQueueSize = offsetCacheThreadPoolQueueSize
           , kafkaAdminClientThreadPoolSize = kafkaAdminClientThreadPoolSize
           , kafkaAdminClientThreadPoolQueueSize = kafkaAdminClientThreadPoolQueueSize
+          , kafkaManagedOffsetMetadataCheckMillis = kafkaManagedOffsetMetadataCheckMillis
+          , kafkaManagedOffsetGroupCacheSize = kafkaManagedOffsetGroupCacheSize
+          , kafkaManagedOffsetGroupExpireDays = kafkaManagedOffsetGroupExpireDays
         )
       }
     }
@@ -316,10 +405,44 @@ case class ClusterConfig (name: String
                           , jmxEnabled: Boolean
                           , jmxUser: Option[String]
                           , jmxPass: Option[String]
+                          , jmxSsl: Boolean
                           , pollConsumers: Boolean
                           , filterConsumers: Boolean
                           , logkafkaEnabled: Boolean
                           , activeOffsetCacheEnabled: Boolean
                           , displaySizeEnabled: Boolean
                           , tuning: Option[ClusterTuning]
+                          , securityProtocol: SecurityProtocol
                          )
+
+sealed trait SecurityProtocol {
+  def stringId: String
+  def secure: Boolean
+}
+case object SASL_PLAINTEXT extends SecurityProtocol {
+  val stringId = "SASL_PLAINTEXT"
+  val secure = true
+}
+case object SASL_SSL extends SecurityProtocol {
+  val stringId = "SASL_SSL"
+  val secure = true
+}
+case object SSL extends SecurityProtocol {
+  val stringId = "SSL"
+  val secure = true
+}
+case object PLAINTEXT extends SecurityProtocol {
+  val stringId = "PLAINTEXT"
+  val secure = false
+}
+object SecurityProtocol {
+  private[this] val typesMap: Map[String, SecurityProtocol] = Map(
+    SASL_PLAINTEXT.stringId -> SASL_PLAINTEXT
+    , SASL_SSL.stringId -> SASL_SSL
+    , SSL.stringId -> SSL
+    , PLAINTEXT.stringId -> PLAINTEXT
+  )
+
+  val formSelectList : IndexedSeq[(String,String)] = typesMap.toIndexedSeq.map(t => (t._1,t._2.stringId))
+  def apply(s: String) : SecurityProtocol = typesMap(s.toUpperCase)
+}
